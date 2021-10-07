@@ -17,6 +17,9 @@ module ActiveRecord
       property_key = options.delete(:property_key) || arel.orders.first.try(:value).try(:name) || arel.orders.first.try(:split,' ').try(:first)
       tbl = connection.quote_table_name(options.delete(:property_table_name) || table.name)
       sanitized_key = "#{tbl}.#{connection.quote_column_name(property_key)}"
+      # handle nested values for Rails < 6.0.3 versions that don't allow you to add attributes from joined tables when using includes
+      # https://github.com/rails/rails/issues/34889
+      parent_key = options.delete(:parent_key)
       relation = relation.limit(batch_size)
 
       records = start ? (direction == :desc ? relation.where("#{sanitized_key} <= ?", start).to_a : relation.where("#{sanitized_key} >= ?", start).to_a)  : relation.to_a
@@ -29,12 +32,12 @@ module ActiveRecord
 
         break if records_size < batch_size
 
-        next_start = records.last.send(property_key)
+        next_start = get_property_val(records.last, parent_key, property_key)
         with_start_ids.clear if start != next_start
         start = next_start
 
         records.each do |record|
-          if record.send(property_key) == start
+          if get_property_val(record, parent_key, property_key) == start
             with_start_ids << record.id
           end
         end
@@ -53,7 +56,9 @@ module ActiveRecord
       end
     end
 
-
+    def get_property_val(record, parent_key, property_key)
+      parent_key ? record.as_json(include: parent_key).dig(parent_key, property_key) : record.send(property_key)
+    end
   end
 
   class Relation
