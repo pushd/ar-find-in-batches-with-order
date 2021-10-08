@@ -57,7 +57,7 @@ module ActiveRecord
     end
 
     def get_property_val(record, parent_key, property_key)
-      parent_key ? record.as_json(include: parent_key).dig(parent_key, property_key) : record.send(property_key)
+      parent_key ? record.send(parent_key).send(property_key) : record.send(property_key)
     end
   end
 
